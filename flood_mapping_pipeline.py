@@ -3,13 +3,11 @@ import pandas as pd
 from sentinelsat import SentinelAPI
 import os
 import rasterio as rio
-import matplotlib.pyplot as plt
 import numpy as np
-
-import sys
-sys.path.append('/Users/rodekruis/Library/Python/3.7/bin')
+from rasterio import mask
+from rasterio.warp import Resampling
 import seaborn as sns
-import urllib.request, sys, getopt, os
+import urllib.request
 
 
 def retrieve_all_gdacs_events():
@@ -114,7 +112,7 @@ def read_in_denoised_image(path_in):
     return im_out
 
 
-def get_water_threshold(im_in):
+def get_water_threshold_from_local_minimum(im_in):
 
     im = im_in[im_in > 0]
     im_log = np.log10(im)
@@ -137,6 +135,57 @@ def get_water_threshold(im_in):
         return loc_minima.iloc[0].x
 
 
+def get_water_threshold_from_water_bodies(water_bodies_in, satellite_in, permanent_water_values=12):
+    water_body_values = water_bodies_in.squeeze()
+    water_values = satellite_in[water_body_values == permanent_water_values]
+    water_values_log = np.log10(water_values[water_values > 0])
+    threshold_out = np.percentile(water_values_log, 99)
+
+    return threshold_out
+
+
+def get_water_body_file_url(bounds_in):
+
+    left_coord = bounds_in.left
+    if left_coord < 0:
+        lid = (int(-left_coord / 10) + 1) * 10
+        lid_str = f'{lid}W'
+    else:
+        lid = int(left_coord / 10) * 10
+        lid_str = f'{lid}E'
+
+    top_coord = bounds_in.top
+    if top_coord < 0:
+        tid = int(-top_coord / 10) * 10
+        tid_str = f'{tid}S'
+    else:
+        tid = (int(top_coord / 10) + 1) * 10
+        tid_str = f'{tid}N'
+
+    base_url = 'https://storage.googleapis.com/global-surface-water/downloads2/seasonality/'
+    filename_out = 'seasonality_' + lid_str + '_' + tid_str + '_v1_1.tif'
+
+    return base_url + filename_out, filename_out
+
+
+def crop_water_body_image(water_body_file_in, bounds_in):
+    water_bodies = rio.open(water_body_file_in)
+    b = bounds_in
+    geojson_dict = {'type': 'Polygon',
+                    'coordinates': [[(b.left, b.bottom),
+                                     (b.right, b.bottom),
+                                     (b.right, b.top),
+                                     (b.left, b.top),
+                                     (b.left, b.bottom)]]}
+    water_bodies_cropped_out, wb_transform = mask.mask(water_bodies, [geojson_dict], crop=True, indexes=1)
+    with rio.open(f'{water_body_file_in[:-4]}_cropped.tif', 'w',
+                  driver='GTiff', height=water_bodies_cropped_out.shape[0],
+                  width=water_bodies_cropped_out.shape[1], count=1,
+                  dtype=water_bodies_cropped_out.dtype, crs=water_bodies.crs,
+                  transform=wb_transform) as dst:
+        dst.write(water_bodies_cropped_out, 1)
+
+
 if __name__ == '__main__':
 
     api = connect_to_sentinel_api()
@@ -150,37 +199,20 @@ if __name__ == '__main__':
     download = download_satellite_image(api, id_most_recent, 'output')
     graph = 'denoiseGraph.xml'
     remove_noise_using_snap(download['path'], 'output/{}_denoised.tif'.format(id_most_recent), graph)
+
+    # get threshold through local minimum in histogram
     denoised_image = read_in_denoised_image('output/{}_denoised.tif'.format(id_most_recent))
-    threshold = get_water_threshold(denoised_image)
+    threshold_loc_min = get_water_threshold_from_local_minimum(denoised_image)
+    bin_mask = (denoised_image < (10 ** threshold_loc_min)) & (denoised_image > 0)
 
-    bin_mask = (denoised_image < (10 ** threshold)) & (denoised_image > 0)
+    # get threshold by looking at permanent water bodies
+    denoised_image = rio.open('output/{}_denoised.tif'.format(id_most_recent))
+    water_body_url, filename = get_water_body_file_url(denoised_image.bounds)
+    urllib.request.urlretrieve(water_body_url, 'data/water_bodies/' + filename)
+    crop_water_body_image('data/water_bodies/' + filename, denoised_image.bounds)
 
-    import urllib.request, sys, getopt, os
-
-
-    DATASET_NAME = 'Transitions'
-    longs = [str(w) + "W" for w in range(180, 0, -10)]
-    longs.extend([str(e) + "E" for e in range(0, 180, 10)])
-    lats = [str(s) + "S" for s in range(50, 0, -10)]
-    lats.extend([str(n) + "N" for n in range(0, 90, 10)])
-    fileCount = len(longs) * len(lats)
-    counter = 1
-    for lng in longs:
-        for lat in lats:
-            filename = DATASET_NAME + "_" + str(lng) + "_" + str(lat) + ".tif"
-            if os.path.exists(DESTINATION_FOLDER + filename):
-                print(DESTINATION_FOLDER + filename + " already exists - skipping")
-            else:
-                url = "http://storage.googleapis.com/global-surface-water/downloads2/" + DATASET_NAME + "/" + filename
-                code = urllib.request.urlopen(url).getcode()
-                if (code != 404):
-                    print("Downloading " + url + " (" + str(counter) + "/" + str(fileCount) + ")")
-                    urllib.request.urlretrieve(url, DESTINATION_FOLDER + filename)
-                else:
-                    print(url + " not found")
-            counter += 1
-
-    filename = 'transitions_120E_20N_v1_1.tif'
-    url = "https://storage.googleapis.com/global-surface-water/downloads2/transitions/" + filename
-    code = urllib.request.urlopen(url).getcode()
-    urllib.request.urlretrieve(url, 'data/water_bodies/' + filename)
+    satellite_values = read_in_denoised_image('output/cropped_denoised.tif')
+    water_bodies_cropped = rio.open(f'data/water_bodies/{filename[:-4]}_cropped.tif')
+    water_bodies_cropped_upsampled = water_bodies_cropped.read(out_shape=(denoised_image.height, denoised_image.width),
+                                                               resampling=Resampling.nearest)
+    threshold = get_water_threshold_from_water_bodies(water_bodies_cropped_upsampled, satellite_values)
