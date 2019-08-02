@@ -186,6 +186,16 @@ def crop_water_body_image(water_body_file_in, bounds_in):
         dst.write(water_bodies_cropped_out, 1)
 
 
+def story_binary_mask(satellite_in, threshold_in, crs_in, transform_in, id_in):
+    mask_out = np.asarray((satellite_in < (10 ** threshold_in)) & (satellite_in > 0)).astype('float')
+    with rio.open(f'output/{id_in}_bin_water_mask.tif', 'w',
+                  driver='GTiff', height=mask_out.shape[0],
+                  width=mask_out.shape[1], count=1,
+                  dtype=mask_out.dtype, crs=crs_in,
+                  transform=transform_in) as dst:
+        dst.write(mask_out, 1)
+
+
 if __name__ == '__main__':
 
     api = connect_to_sentinel_api()
@@ -202,8 +212,8 @@ if __name__ == '__main__':
 
     # get threshold through local minimum in histogram
     denoised_image = read_in_denoised_image('output/{}_denoised.tif'.format(id_most_recent))
-    threshold_loc_min = get_water_threshold_from_local_minimum(denoised_image)
-    bin_mask = (denoised_image < (10 ** threshold_loc_min)) & (denoised_image > 0)
+    threshold = get_water_threshold_from_local_minimum(denoised_image)
+    bin_mask = (denoised_image < (10 ** threshold)) & (denoised_image > 0)
 
     # get threshold by looking at permanent water bodies
     denoised_image = rio.open('output/{}_denoised.tif'.format(id_most_recent))
@@ -211,8 +221,12 @@ if __name__ == '__main__':
     urllib.request.urlretrieve(water_body_url, 'data/water_bodies/' + filename)
     crop_water_body_image('data/water_bodies/' + filename, denoised_image.bounds)
 
-    satellite_values = read_in_denoised_image('output/cropped_denoised.tif')
+    satellite_values = read_in_denoised_image('output/{}_denoised.tif'.format(id_most_recent))
     water_bodies_cropped = rio.open(f'data/water_bodies/{filename[:-4]}_cropped.tif')
     water_bodies_cropped_upsampled = water_bodies_cropped.read(out_shape=(denoised_image.height, denoised_image.width),
                                                                resampling=Resampling.nearest)
     threshold = get_water_threshold_from_water_bodies(water_bodies_cropped_upsampled, satellite_values)
+
+    # store binary mask
+    story_binary_mask(satellite_values, threshold, denoised_image.crs, denoised_image.transform, id_most_recent)
+
