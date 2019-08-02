@@ -2,7 +2,14 @@ import feedparser
 import pandas as pd
 from sentinelsat import SentinelAPI
 import os
-from PIL import Image
+import rasterio as rio
+import matplotlib.pyplot as plt
+import numpy as np
+
+import sys
+sys.path.append('/Users/rodekruis/Library/Python/3.7/bin')
+import seaborn as sns
+import urllib.request, sys, getopt, os
 
 
 def retrieve_all_gdacs_events():
@@ -99,16 +106,38 @@ def remove_noise_using_snap(path_in, path_out, path_graph, path_to_gpt='/Applica
     os.system("{} -t {} {} {}".format(path_to_gpt, path_out, path_graph, path_in))
 
 
-def get_histogram(image_file_in):
-    im = Image.open(image_file_in)
-    hist_out = im.histogram()
+def read_in_denoised_image(path_in):
 
-    return hist_out
+    with rio.open(path_in) as src:
+        im_out = src.read(1)
+
+    return im_out
+
+
+def get_water_threshold(im_in):
+
+    im = im_in[im_in > 0]
+    im_log = np.log10(im)
+    data = im_log.ravel()
+    p = sns.kdeplot(data, shade=True)
+    x, y = p.get_lines()[0].get_data()
+    hist_df = pd.DataFrame({'x': x, 'y': y})
+    hist_df = hist_df.query('-3 < x < 0')
+    hist_df['prev'] = hist_df.y.diff(periods=1).values
+    hist_df['next'] = hist_df.prev.shift(-1).values
+    hist_df['loc_min'] = (hist_df.prev < 0) & (hist_df.next > 0)
+    loc_minima = hist_df.query('loc_min')
+    if len(loc_minima) > 1:
+        loc_minima = loc_minima.query('-2 < x < -1')
+
+    if len(loc_minima) != 1:
+        print('cannot find local minimum, please identify manually')
+        return None
+    else:
+        return loc_minima.iloc[0].x
 
 
 if __name__ == '__main__':
-
-    Image.MAX_IMAGE_PIXELS = None
 
     api = connect_to_sentinel_api()
     gdacs_events = retrieve_all_gdacs_events()
@@ -121,4 +150,37 @@ if __name__ == '__main__':
     download = download_satellite_image(api, id_most_recent, 'output')
     graph = 'denoiseGraph.xml'
     remove_noise_using_snap(download['path'], 'output/{}_denoised.tif'.format(id_most_recent), graph)
-    histogram = get_histogram('output/{}_denoised.tif'.format(id_most_recent))
+    denoised_image = read_in_denoised_image('output/{}_denoised.tif'.format(id_most_recent))
+    threshold = get_water_threshold(denoised_image)
+
+    bin_mask = (denoised_image < (10 ** threshold)) & (denoised_image > 0)
+
+    import urllib.request, sys, getopt, os
+
+
+    DATASET_NAME = 'Transitions'
+    longs = [str(w) + "W" for w in range(180, 0, -10)]
+    longs.extend([str(e) + "E" for e in range(0, 180, 10)])
+    lats = [str(s) + "S" for s in range(50, 0, -10)]
+    lats.extend([str(n) + "N" for n in range(0, 90, 10)])
+    fileCount = len(longs) * len(lats)
+    counter = 1
+    for lng in longs:
+        for lat in lats:
+            filename = DATASET_NAME + "_" + str(lng) + "_" + str(lat) + ".tif"
+            if os.path.exists(DESTINATION_FOLDER + filename):
+                print(DESTINATION_FOLDER + filename + " already exists - skipping")
+            else:
+                url = "http://storage.googleapis.com/global-surface-water/downloads2/" + DATASET_NAME + "/" + filename
+                code = urllib.request.urlopen(url).getcode()
+                if (code != 404):
+                    print("Downloading " + url + " (" + str(counter) + "/" + str(fileCount) + ")")
+                    urllib.request.urlretrieve(url, DESTINATION_FOLDER + filename)
+                else:
+                    print(url + " not found")
+            counter += 1
+
+    filename = 'transitions_120E_20N_v1_1.tif'
+    url = "https://storage.googleapis.com/global-surface-water/downloads2/transitions/" + filename
+    code = urllib.request.urlopen(url).getcode()
+    urllib.request.urlretrieve(url, 'data/water_bodies/' + filename)
