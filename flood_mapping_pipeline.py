@@ -8,6 +8,9 @@ from rasterio import mask
 from rasterio.warp import Resampling
 import seaborn as sns
 import urllib.request
+from zipfile import ZipFile
+from geopy.distance import distance
+import matplotlib.pyplot as plt
 
 
 def retrieve_all_gdacs_events():
@@ -15,7 +18,7 @@ def retrieve_all_gdacs_events():
     Reads in the RSS feed from GDACS and returns all current events in a pandas data frame
     """
 
-    feed = feedparser.parse('http://www.gdacs.org/xml/rss.xml')
+    feed = feedparser.parse('feed://gdacs.org/xml/rss.xml')
     events_out = pd.DataFrame(feed.entries)
     return events_out
 
@@ -168,8 +171,8 @@ def get_water_body_file_url(bounds_in):
     return base_url + filename_out, filename_out
 
 
-def crop_water_body_image(water_body_file_in, bounds_in):
-    water_bodies = rio.open(water_body_file_in)
+def crop_image(image_file_in, bounds_in):
+    image_to_crop = rio.open(image_file_in)
     b = bounds_in
     geojson_dict = {'type': 'Polygon',
                     'coordinates': [[(b.left, b.bottom),
@@ -177,23 +180,79 @@ def crop_water_body_image(water_body_file_in, bounds_in):
                                      (b.right, b.top),
                                      (b.left, b.top),
                                      (b.left, b.bottom)]]}
-    water_bodies_cropped_out, wb_transform = mask.mask(water_bodies, [geojson_dict], crop=True, indexes=1)
-    with rio.open(f'{water_body_file_in[:-4]}_cropped.tif', 'w',
-                  driver='GTiff', height=water_bodies_cropped_out.shape[0],
-                  width=water_bodies_cropped_out.shape[1], count=1,
-                  dtype=water_bodies_cropped_out.dtype, crs=water_bodies.crs,
-                  transform=wb_transform) as dst:
-        dst.write(water_bodies_cropped_out, 1)
+    image_out, transform_out = mask.mask(image_to_crop, [geojson_dict], crop=True, indexes=1)
+    with rio.open(f'{image_file_in[:-4]}_cropped.tif', 'w',
+                  driver='GTiff', height=image_out.shape[0],
+                  width=image_out.shape[1], count=1,
+                  dtype=image_out.dtype, crs=image_to_crop.crs,
+                  transform=transform_out) as dst:
+        dst.write(image_out, 1)
 
 
-def story_binary_mask(satellite_in, threshold_in, crs_in, transform_in, id_in):
-    mask_out = np.asarray((satellite_in < (10 ** threshold_in)) & (satellite_in > 0)).astype('float')
+def story_binary_mask(satellite_in, water_threshold_in, slopes_in, slope_threshold_in, crs_in, transform_in, id_in):
+    mask_out = np.asarray((satellite_in < (10 ** water_threshold_in)) &
+                          (satellite_in > 0) &
+                          (slopes_in < slope_threshold_in)).astype('float')
+
     with rio.open(f'output/{id_in}_bin_water_mask.tif', 'w',
                   driver='GTiff', height=mask_out.shape[0],
                   width=mask_out.shape[1], count=1,
                   dtype=mask_out.dtype, crs=crs_in,
                   transform=transform_in) as dst:
         dst.write(mask_out, 1)
+
+    return mask_out
+
+
+def get_altitude_file_url(bounds_in):
+    base_url = "http://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF/"
+
+    tile_x = int((bounds_in[0] + 180) // 5) + 1
+    tile_y = int((60 - bounds_in[3]) // 5) + 1
+
+    if tile_x > 9:
+        x = str(tile_x)
+    else:
+        x = "0" + str(tile_x)
+    if tile_y > 9:
+        y = str(tile_y)
+    else:
+        y = "0" + str(tile_y)
+
+    filename_out = 'srtm_' + x + '_' + y + '.zip'
+
+    return base_url + filename_out, filename_out
+
+
+def extract_altitude_file(file_in):
+    with ZipFile('data/altitude/' + file_in, 'r') as zipObj:
+        zipObj.extractall(file_in[:-4])
+
+    return 'data/altitude/' + file_in[:-4] + '/' + file_in[:-4] + '.tif'
+
+
+def calculate_slopes(altitudes_in, bounds_in):
+
+    height_px, width_px = altitudes_in.shape
+
+    coords_lb = (bounds_in.bottom, bounds_in.left)
+    coords_rb = (bounds_in.bottom, bounds_in.right)
+    coords_lt = (bounds_in.top, bounds_in.left)
+    coords_rt = (bounds_in.top, bounds_in.right)
+
+    height_m = distance(coords_lb, coords_lt).km * 1000
+    width_m = (distance(coords_lb, coords_rb).km + distance(coords_lt, coords_rt).km) / 2 * 1000
+
+    cellsize_x = width_m / width_px
+    cellsize_y = height_m / height_px
+    z = np.zeros((height_px + 2, width_px + 2))
+    z[1:-1, 1:-1] = altitudes_in.copy()
+    z[z == -32768] = np.nan
+    dx = (z[1:-1, 2:] - z[1:-1, :-2]) / (2*cellsize_x)
+    dy = (z[2:, 1:-1] - z[:-2, 1:-1]) / (2*cellsize_y)
+    slope_deg = np.arctan(np.sqrt(dx*dx + dy*dy)) * (180 / np.pi)
+
+    return slope_deg
 
 
 if __name__ == '__main__':
@@ -210,23 +269,30 @@ if __name__ == '__main__':
     graph = 'denoiseGraph.xml'
     remove_noise_using_snap(download['path'], 'output/{}_denoised.tif'.format(id_most_recent), graph)
 
-    # get threshold through local minimum in histogram
-    denoised_image = read_in_denoised_image('output/{}_denoised.tif'.format(id_most_recent))
-    threshold = get_water_threshold_from_local_minimum(denoised_image)
-    bin_mask = (denoised_image < (10 ** threshold)) & (denoised_image > 0)
-
     # get threshold by looking at permanent water bodies
     denoised_image = rio.open('output/{}_denoised.tif'.format(id_most_recent))
-    water_body_url, filename = get_water_body_file_url(denoised_image.bounds)
-    urllib.request.urlretrieve(water_body_url, 'data/water_bodies/' + filename)
-    crop_water_body_image('data/water_bodies/' + filename, denoised_image.bounds)
+    water_body_url, wb_filename = get_water_body_file_url(denoised_image.bounds)
+    urllib.request.urlretrieve(water_body_url, 'data/water_bodies/' + wb_filename)
+    crop_image('data/water_bodies/' + wb_filename, denoised_image.bounds)
 
     satellite_values = read_in_denoised_image('output/{}_denoised.tif'.format(id_most_recent))
-    water_bodies_cropped = rio.open(f'data/water_bodies/{filename[:-4]}_cropped.tif')
+    water_bodies_cropped = rio.open(f'data/water_bodies/{wb_filename[:-4]}_cropped.tif')
     water_bodies_cropped_upsampled = water_bodies_cropped.read(out_shape=(denoised_image.height, denoised_image.width),
                                                                resampling=Resampling.nearest)
-    threshold = get_water_threshold_from_water_bodies(water_bodies_cropped_upsampled, satellite_values)
+    water_threshold = get_water_threshold_from_water_bodies(water_bodies_cropped_upsampled, satellite_values)
+
+    # filter out wrong detections through slope information
+    altitude_file_url, al_filename = get_altitude_file_url(denoised_image.bounds)
+    urllib.request.urlretrieve(altitude_file_url, 'data/altitude/' + al_filename)
+    altitude_tif_file = extract_altitude_file(al_filename)
+    crop_image(altitude_tif_file, denoised_image.bounds)
+    altitudes_cropped = rio.open(f'data/altitude/{al_filename[:-4]}/{al_filename[:-4]}_cropped.tif')
+    altitudes_cropped_upsampled = altitudes_cropped.read(out_shape=(denoised_image.height, denoised_image.width),
+                                                         resampling=Resampling.bilinear)
+    slopes = calculate_slopes(altitudes_cropped_upsampled[0], altitudes_cropped.bounds)
+    slope_threshold = 10     # degrees
 
     # store binary mask
-    story_binary_mask(satellite_values, threshold, denoised_image.crs, denoised_image.transform, id_most_recent)
-
+    bin_mask = story_binary_mask(satellite_values, water_threshold, slopes, slope_threshold,
+                                 denoised_image.crs, denoised_image.transform, id_most_recent)
+    plt.imshow(bin_mask)
