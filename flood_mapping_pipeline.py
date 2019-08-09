@@ -6,10 +6,11 @@ import rasterio as rio
 import numpy as np
 from rasterio import mask
 from rasterio.warp import Resampling
-import seaborn as sns
 import urllib.request
 from zipfile import ZipFile
 from geopy.distance import distance
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 
 
@@ -29,8 +30,8 @@ def get_specific_events(gdacs_events_in, event_code_in):
     EQ: earthquake
     TC: tropical cyclone
     DR: drought
-    ??: flood
-    ??: volcano
+    FL: flood
+    VO: volcano
     Requires a pandas data frame as input. Returns a pandas data frame
     """
     return gdacs_events_in.query("gdacs_eventtype == '{}'".format(event_code_in))
@@ -115,27 +116,27 @@ def read_in_denoised_image(path_in):
     return im_out
 
 
-def get_water_threshold_from_local_minimum(im_in):
-
-    im = im_in[im_in > 0]
-    im_log = np.log10(im)
-    data = im_log.ravel()
-    p = sns.kdeplot(data, shade=True)
-    x, y = p.get_lines()[0].get_data()
-    hist_df = pd.DataFrame({'x': x, 'y': y})
-    hist_df = hist_df.query('-3 < x < 0')
-    hist_df['prev'] = hist_df.y.diff(periods=1).values
-    hist_df['next'] = hist_df.prev.shift(-1).values
-    hist_df['loc_min'] = (hist_df.prev < 0) & (hist_df.next > 0)
-    loc_minima = hist_df.query('loc_min')
-    if len(loc_minima) > 1:
-        loc_minima = loc_minima.query('-2 < x < -1')
-
-    if len(loc_minima) != 1:
-        print('cannot find local minimum, please identify manually')
-        return None
-    else:
-        return loc_minima.iloc[0].x
+# def get_water_threshold_from_local_minimum(im_in):
+#
+#     im = im_in[im_in > 0]
+#     im_log = np.log10(im)
+#     data = im_log.ravel()
+#     p = sns.kdeplot(data, shade=True)
+#     x, y = p.get_lines()[0].get_data()
+#     hist_df = pd.DataFrame({'x': x, 'y': y})
+#     hist_df = hist_df.query('-3 < x < 0')
+#     hist_df['prev'] = hist_df.y.diff(periods=1).values
+#     hist_df['next'] = hist_df.prev.shift(-1).values
+#     hist_df['loc_min'] = (hist_df.prev < 0) & (hist_df.next > 0)
+#     loc_minima = hist_df.query('loc_min')
+#     if len(loc_minima) > 1:
+#         loc_minima = loc_minima.query('-2 < x < -1')
+#
+#     if len(loc_minima) != 1:
+#         print('cannot find local minimum, please identify manually')
+#         return None
+#     else:
+#         return loc_minima.iloc[0].x
 
 
 def get_water_threshold_from_water_bodies(water_bodies_in, satellite_in, permanent_water_values=12):
@@ -152,18 +153,18 @@ def get_water_body_file_url(bounds_in):
     left_coord = bounds_in.left
     if left_coord < 0:
         lid = (int(-left_coord / 10) + 1) * 10
-        lid_str = f'{lid}W'
+        lid_str = '{}W'.format(lid)
     else:
         lid = int(left_coord / 10) * 10
-        lid_str = f'{lid}E'
+        lid_str = '{}E'.format(lid)
 
     top_coord = bounds_in.top
     if top_coord < 0:
         tid = int(-top_coord / 10) * 10
-        tid_str = f'{tid}S'
+        tid_str = 'S'.format(tid)
     else:
         tid = (int(top_coord / 10) + 1) * 10
-        tid_str = f'{tid}N'
+        tid_str = '{}N'.format(tid)
 
     base_url = 'https://storage.googleapis.com/global-surface-water/downloads2/seasonality/'
     filename_out = 'seasonality_' + lid_str + '_' + tid_str + '_v1_1.tif'
@@ -181,7 +182,7 @@ def crop_image(image_file_in, bounds_in):
                                      (b.left, b.top),
                                      (b.left, b.bottom)]]}
     image_out, transform_out = mask.mask(image_to_crop, [geojson_dict], crop=True, indexes=1)
-    with rio.open(f'{image_file_in[:-4]}_cropped.tif', 'w',
+    with rio.open('{}_cropped.tif'.format(image_file_in[:-4]), 'w',
                   driver='GTiff', height=image_out.shape[0],
                   width=image_out.shape[1], count=1,
                   dtype=image_out.dtype, crs=image_to_crop.crs,
@@ -194,7 +195,7 @@ def story_binary_mask(satellite_in, water_threshold_in, slopes_in, slope_thresho
                           (satellite_in > 0) &
                           (slopes_in < slope_threshold_in)).astype('float')
 
-    with rio.open(f'output/{id_in}_bin_water_mask.tif', 'w',
+    with rio.open('output/{}_bin_water_mask.tif'.format(id_in), 'w',
                   driver='GTiff', height=mask_out.shape[0],
                   width=mask_out.shape[1], count=1,
                   dtype=mask_out.dtype, crs=crs_in,
@@ -259,8 +260,8 @@ if __name__ == '__main__':
 
     api = connect_to_sentinel_api()
     gdacs_events = retrieve_all_gdacs_events()
-    drought_events = get_specific_events(gdacs_events, 'DR')
-    bbox, location = get_coordinates_for_event(drought_events.iloc[0])
+    flood_events = get_specific_events(gdacs_events, 'FL')
+    bbox, location = get_coordinates_for_event(flood_events.iloc[0])
     polygon = create_polygon_from_bbox(bbox)
     images = get_available_satellite_images(api, polygon)
     # images = get_available_satellite_images(api, location, coordinates_type='POINT')
@@ -269,24 +270,24 @@ if __name__ == '__main__':
     graph = 'denoiseGraph.xml'
     remove_noise_using_snap(download['path'], 'output/{}_denoised.tif'.format(id_most_recent), graph)
 
-    # get threshold by looking at permanent water bodies
+    # get threshold by looking at permanent water bodies in ROI
     denoised_image = rio.open('output/{}_denoised.tif'.format(id_most_recent))
     water_body_url, wb_filename = get_water_body_file_url(denoised_image.bounds)
     urllib.request.urlretrieve(water_body_url, 'data/water_bodies/' + wb_filename)
     crop_image('data/water_bodies/' + wb_filename, denoised_image.bounds)
 
     satellite_values = read_in_denoised_image('output/{}_denoised.tif'.format(id_most_recent))
-    water_bodies_cropped = rio.open(f'data/water_bodies/{wb_filename[:-4]}_cropped.tif')
+    water_bodies_cropped = rio.open('data/water_bodies/{}_cropped.tif'.format(wb_filename[:-4]))
     water_bodies_cropped_upsampled = water_bodies_cropped.read(out_shape=(denoised_image.height, denoised_image.width),
                                                                resampling=Resampling.nearest)
     water_threshold = get_water_threshold_from_water_bodies(water_bodies_cropped_upsampled, satellite_values)
 
-    # filter out wrong detections through slope information
+    # get slope information for ROI
     altitude_file_url, al_filename = get_altitude_file_url(denoised_image.bounds)
     urllib.request.urlretrieve(altitude_file_url, 'data/altitude/' + al_filename)
     altitude_tif_file = extract_altitude_file(al_filename)
     crop_image(altitude_tif_file, denoised_image.bounds)
-    altitudes_cropped = rio.open(f'data/altitude/{al_filename[:-4]}/{al_filename[:-4]}_cropped.tif')
+    altitudes_cropped = rio.open('data/altitude/{}/{}_cropped.tif'.format(al_filename[:-4], al_filename[:-4]))
     altitudes_cropped_upsampled = altitudes_cropped.read(out_shape=(denoised_image.height, denoised_image.width),
                                                          resampling=Resampling.bilinear)
     slopes = calculate_slopes(altitudes_cropped_upsampled[0], altitudes_cropped.bounds)
