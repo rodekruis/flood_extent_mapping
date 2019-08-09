@@ -65,7 +65,7 @@ def connect_to_sentinel_api():
     return SentinelAPI('wouteroosterheert', 'rodekruis', 'https://scihub.copernicus.eu/dhus')
 
 
-# TODO select image with most overlap
+# TODO calculate overlap with ROI using footprint metadata
 def get_available_satellite_images(api_in, coordinates_in, coordinates_type='POLY'):
     """
     Queries the sentinel api for available images in the past 30 days for a specified region for Sentinel-1.
@@ -139,9 +139,9 @@ def read_in_denoised_image(path_in):
 #         return loc_minima.iloc[0].x
 
 
-def get_water_threshold_from_water_bodies(water_bodies_in, satellite_in, permanent_water_values=12):
+def get_water_threshold_from_water_bodies(water_bodies_in, satellite_in, permanent_water_value_in=12):
     water_body_values = water_bodies_in.squeeze()
-    water_values = satellite_in[water_body_values == permanent_water_values]
+    water_values = satellite_in[water_body_values == permanent_water_value_in]
     water_values_log = np.log10(water_values[water_values > 0])
     threshold_out = np.percentile(water_values_log, 99)
 
@@ -190,10 +190,12 @@ def crop_image(image_file_in, bounds_in):
         dst.write(image_out, 1)
 
 
-def story_binary_mask(satellite_in, water_threshold_in, slopes_in, slope_threshold_in, crs_in, transform_in, id_in):
+def story_binary_mask(satellite_in, water_threshold_in, slopes_in, slope_threshold_in,
+                      water_bodies_in, permanent_water_value_in, crs_in, transform_in, id_in):
     mask_out = np.asarray((satellite_in < (10 ** water_threshold_in)) &
                           (satellite_in > 0) &
-                          (slopes_in < slope_threshold_in)).astype('float')
+                          (slopes_in < slope_threshold_in) &
+                          (water_bodies_in != permanent_water_value_in)).astype('float')
 
     with rio.open('output/{}_bin_water_mask.tif'.format(id_in), 'w',
                   driver='GTiff', height=mask_out.shape[0],
@@ -248,7 +250,7 @@ def calculate_slopes(altitudes_in, bounds_in):
     cellsize_y = height_m / height_px
     z = np.zeros((height_px + 2, width_px + 2))
     z[1:-1, 1:-1] = altitudes_in.copy()
-    z[z == -32768] = np.nan
+    z[z == -32768] = 0
     dx = (z[1:-1, 2:] - z[1:-1, :-2]) / (2*cellsize_x)
     dy = (z[2:, 1:-1] - z[:-2, 1:-1]) / (2*cellsize_y)
     slope_deg = np.arctan(np.sqrt(dx*dx + dy*dy)) * (180 / np.pi)
@@ -291,9 +293,11 @@ if __name__ == '__main__':
     altitudes_cropped_upsampled = altitudes_cropped.read(out_shape=(denoised_image.height, denoised_image.width),
                                                          resampling=Resampling.bilinear)
     slopes = calculate_slopes(altitudes_cropped_upsampled[0], altitudes_cropped.bounds)
-    slope_threshold = 10     # degrees
 
     # store binary mask
+    slope_threshold = 10     # degrees
+    permanent_water_values = 12
     bin_mask = story_binary_mask(satellite_values, water_threshold, slopes, slope_threshold,
+                                 water_bodies_cropped_upsampled[0], permanent_water_values,
                                  denoised_image.crs, denoised_image.transform, id_most_recent)
     plt.imshow(bin_mask)
