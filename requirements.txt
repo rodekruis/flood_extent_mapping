@@ -1,0 +1,12 @@
+##### Required packages #####
+jupyterlab
+scipy
+numpy
+matplotlib
+pandas
+sentinelsat
+geopandas
+rasterio
+scikit-image      
+ipyleaflet
+ipywidgets
