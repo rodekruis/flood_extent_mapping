@@ -1,180 +1,118 @@
-# flood extent mapping from Sentinel-1 images 
+# flood-extent-mapping
+*Currently in development*
+
+Docker container that runs the UN-SPIDER jupyter notebook. 
+
+**Scope**: rough map of flood extent based on satellite imagery
+
+**Input**: Area of Interest. Currently supported:
+
+* GeoJSON
+* KML
+* KMZ
+* SHP
+
+**Output**: Flooded area, in:
+
+* GeoTIFF
+* SHP
+* KML 
+* GeoJSON
+
+## Credits
+
+* This [UN-SPIDER Radar-based Flood Mapping Jupyter notebook](https://github.com/UN-SPIDER/radar-based-flood-mapping)
+* This Docker image: [docker-snap](github.com/snap-contrib/docker-snap)
+
+Development: Wouter Oosterheert, Misha Klein, Rosanna van Hespen, Jacopo Margutti
+
+Contact: [Jacopo Margutti](mailto:jmargutti@redcross.nl)
+
+## File structure
+Place the following files in a dedicated folder `directory_with_files`:
+
+* `Dockerfile` used to build image
+* `requirements.txt` required python packages
+* `radar-based-flood-mapping.ipynb` jupyter notebook
 
 
-More descriptions will follow when app is completed 
+## Requirements:
 
-### Setup Docker-SNAP container 
+Only Docker is needed. 
 
-We start from an existing docker container, that can be found [here](https://github.com/snap-contrib/docker-snap). 
-This will contain a working Python version + ESA's SNAP interface for analysing Sentinel-1 satelite images (the Python API called snappy). 
-The following instructions are mainly following the instructions shown 
-in their README
+## Getting started
 
+### TLDR
+1. Install Docker
+2. Get a Personal Access Token that has `read:packages` for the GitHub Container repository
+3. Log on to the repository: `docker login docker.pkg.github.com --username <your_user_name> --password <generated_token_not_password>
+`
+4. Build the image `docker build  <directory_with_files> -t <choose_image_name>`
+5. Run the image `docker run -it -v <directory_with_files>:/home/jovyan/flood_extent_mapping -p 8888:8888 --name <container-name> <image_name>`
+6. Go to [localhost:8888](localhost:8888)
+7. Create a folder named 'AOI' and place 1 file in it with the area of interest (GeoJSON, SHP, KML, KMZ).
+8. Run notebook. Set `tile_id` to select which satellite image to download in codeblock 4. 
+9. Run the rest of the notebook. 
 
-As this solution requires one to have accounts at Docker, GitHub and still perform quite some steps, we will attempt to simplify the process when setting up the final application. 
+### Detailed instructions
+ 
+#### 1. Install Docker
 
+Docker Desktop installation guides are available for [Windows](https://docs.docker.com/desktop/windows/install/) and [Mac](https://docs.docker.com/desktop/mac/install/) (Windows requires WSL2).
 
-##### step 1: Installing Docker: 
-Easiest way to get Docker (including the command line interface), is to install [Docker desktop](https://www.docker.com/?utm_source=google&utm_medium=cpc&utm_campaign=dockerhomepage&utm_content=nemea&utm_term=dockerhomepage&utm_budget=growth&gclid=CjwKCAjwgviIBhBkEiwA10D2jzQw0B0_kGBpkPksSWDBnzpF7qEJCCWggWGvt5fMmdyqwfQ4FWd81RoCtrgQAvD_BwE)
+#### 2. Login to the GitHub Container registry
 
-Once done, this should provide you with a 'normal app with GUI to run Docker', as well as the 'command line interface', which is what we will use in the instructions that follow. 
-
-##### step 1: Login to GitHub 
-Docker can obtain the image stored in the GitHub repository once we have done the following trick 
-
-1. [Go to this GitHub page](https://github.com/settings/tokens/new) and login with your GitHub credentials. 
-2. Tick the checkbox that says "read:packages"
-3. Enter a name on top and generate a token 
-4. Go to your command line ('Terminal App' on a Mac):
+1. Login on github and [go to this  page](https://github.com/settings/tokens/new) and create a personal access token with the scope *read:packages*. Copy the token somewhere. 
+2. Go to your command line ('Terminal App' on a Mac, 'Powershell' on Windows) and login to the GitHub Container registry:
 ```{bash}
-docker login docker.pkg.github.com --username <your_GitHub_username> --password <generated_token>
-```
-*note: you enter the generated token, not your GitHub password*
-
-
-##### step 2: Prepare DockerFile for our App
-This step is already done for end-user obviously. 
-For completeness sake, the following has been done: 
-1. Created file with exactly the name "Dockerfile" , no extension 
-2. contents for now is just saying it should build on top of the SNAP image: 
-```
-FROM docker.pkg.github.com/snap-contrib/docker-snap/snap:latest
+docker login docker.pkg.github.com --username <GitHub_username> --password <personal_access_token>
 ```
 
-**note: This docker file will contain more instructions later. That will partially simplify the entire process** 
-
-##### step 3: Build the Docker container 
-
-In your terminal: 
-```
-docker build  <directory_that_has_the_Dockerfile>  -t <enter_name_of_image_you_want>
+#### 3. Create the container
+Build the image:
+```{bash}
+docker build  <directory>  -t <choose_image_name>
 ```
 
-If you'd look in Docker Desktop (under the 'images' tab) you should now see two images: The 'pulled' copy of the docker-snap image and the one created from our Dockerfile (representing our 'flood-extend-mapping app'). 
-
-
-
-**for macOS users** 
-If experiencing an error saying something like '... authentication failed', the following solution from stackoverflow did the trick for me. 
-Replace the above by doing: 
-```
+*If  experiencing an error saying something like '... authentication failed', use this for macOS users:*
+```{bash}
 export DOCKER_BUILDKIT=0
-
 export COMPOSE_DOCKER_CLI_BUILD=0
-
-docker build  <directory_that_has_the_Dockerfile>  -t <enter_name_of_image_you_want>
+```
+*or this for Windows users:*
+```{bash}
+set DOCKER_BUILDKIT=0
+set COMPOSE_DOCKER_CLI_BUILD=0
 ```
 
-
-##### step 4: Run the docker container 
-
-In your terminal, execute:
-```
-docker run \
---rm \
--it \
--v <DIRECTORY ON COMPUTER>:/home/jovyan/flood_extent_mapping \
--p 8888:8888 \
---name <CHOOSE NAME OF CONTAINER> \
-<NAME OF IMAGE THAT YOU SET IN STEP 3>
+Run the container:
+```{bash}
+docker run -it -v <directory>:/home/jovyan/flood_extent_mapping -p 8888:8888 --name <container-name> <image_name>
 ```
 
+* `-it` = interactive
+* `-v` = links to the volume on the local host
+* `-p` port
+* `--name` choose name for the container
+* name of the image
 
-To explain what is goin on, we basically used "docker run our created image", with some additional options that are mainly needed during development. Some of the following may not be needed in the final product. 
+The container has an entrypoint that immediately runs the jupyter notebook that has the ip address 0.0.0.0. Port 8888 is mapped to this address, so the notebook can now be accessed through [localhost:8888](localhost:8888). 
 
+## 4. Running the notebook
+Create a folder named 'AOI' and place 1 file in it with the area of interest (GeoJSON, SHP, KML, KMZ).
+1. *User Input*: Choose a start and end date in which to search through the Copernicus Hub, and set username and password to access the Hub. 
+2. *Initialization*: run
+3. *Download Image*: Running this will show a map and table with available satellite images and their productID's. ProductID's are ordered as Tile1, Tile2, etc.
+4. Set the `tile_id` for the image you want to download. Run the codeblock and the download (usually ~1GB) will start. The image is stored in the folder 'input'. 
+5. *Processing*: the satellite image is processed. Steps 6 and 8 can cause the notebook kernel to crash if the image is too large. 
+6. *Data export*: Stores the flood map as GeoTIFF, GeoJSON, KML and SHP files in a folder called 'output', and shows a geojson map of the flood extent. 
 
-* Give the resulting container a name we can reference if you want to exit and re-enter some other day (```--name``` option)
-* Open a terminal on the 'vitual linux container that is build by Docker' (```-it``` option)
-* Have a folder on your computer that maps to a 'virtual folder inside the container'. This way, you can edit code that can be then run inside the container as well as store output of the container's code on your computer (such that it exists after stopping the Docker container). (```-v``` option)
+## Software required to run the jupyter-notebook
+The required software is automatically installed with the Docker image, that we  based on Docker image 'docker-snap' version ?? (18-06-2021). For completeness, the following software is needed to run the jupyter-notebook (listed with known working version numbers):
 
-* Map a port that we will use for Jupyter lab (```-p``` option)
-* Automatically remove the container when it exits (```--rm``` flag)
+* Python (version 3.9.5)
+* GDAL (version 3.2.2)
+* SNAP (version 8.0.0)
 
-
-
-At this point, you should have entered a terminal inside the container and you are in principle 'good to go'. 
-
-Let's just setup Jupyter and install some additional packages needed. 
-These steps can eventually easily be includen in the Dockerfile, such that end users are done after this step. 
-
-##### step 5: Setting up Jupyter lab inside the conda environment that has SNAP 
-
-1. The Docker container has two conda environents, 'base' and 'env_snap', the later is the one containing the working version of SNAP. 
-To switch into this environment, we must first setup/initialise conda (this container is in essence a new computer and this is the first time you use conda on it)
-```
-conda init
-```
-
-2. It will ask you to restart the terminal. The only way of doing this without exiting the Docker container (which also reverts the previous command apparently), is to use: 
-```
-exec bash 
-```
-
-3. Now we have things setup, we can enter the correct conda enviroment,  
-```
-conda activate env_snap
-```
-4. , install jupyterlab, 
-
-```
-conda install -c conda-forge jupyterlab
-```
-
-5. and tart Jupyterlab  (the ip option used here is needed to access it in our browser that exists outside of the container. We mapped port 8888 to the ip 0.0.0.0)
-
-```
-jupyter-lab --ip=0.0.0.0
-```
-
-6. In your browser go to <http://localhost:8888/lab/>
-The first time it will ask you to enter the 'token', which is that long sequence of numbers/letters seen in the URL shown when starting Jupyter-lab. 
-Typically, you'll only have to do this once. 
-
-
-7. Happy coding in Jupyter :-)
-
-#### step 6: Additional package requirements 
-This part will go into the Dockerfile 
-
-```
-conda install -c conda-forge scipy, numpy, matplotlib, pandas   #(altijd goed om te hebben, maar misschien niet expliciet nodig dit keer) 
-pip install sentinelsat. 
-conda install geopandas
-pip install rasterio
-conda install scikit-image           
-conda install -c anaconda ipyleaflet        # NIET NODIG VOOR UITEINDELIJKE APP 
-conda install -c anaconda ipywidgets     # NIET NODIG VOOR UITEINDELIJKE APP 
-```
-
-
-
-## Stuff to add to Dockerfile 
-```
-# installing packages 
-conda init 
-exec bash 
-conda activate env_snap 
-conda install -c conda-forge scipy, numpy, matplotlib, pandas   #(altijd goed om te hebben, maar misschien niet expliciet nodig dit keer) 
-pip install sentinelsat. 
-conda install geopandas
-pip install rasterio
-conda install scikit-image           
-conda install -c anaconda ipyleaflet        # NIET NODIG VOOR UITEINDELIJKE APP 
-conda install -c anaconda ipywidgets     # NIET NODIG VOOR UITEINDELIJKE APP 
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+All python packages are installed in the conda environment 'env-snap'. GDAl is already  installed with the *docker-snap* image but not recognised as a python package, therefore it is explicitely listed in the Dockerfile.
+*So far GDAL version 3.2.2 is the only version that installs without causing errors.*
