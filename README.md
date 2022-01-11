@@ -87,12 +87,13 @@ set COMPOSE_DOCKER_CLI_BUILD=0
 
 Run the container:
 ```{bash}
-docker run -it -v <directory>:/home/jovyan/flood_extent_mapping -p 8888:8888 --name <container-name> <image_name>
+docker run -it -v <directory>:/home/jovyan/flood_extent_mapping -p 8888:8888 --user root --name <container-name> <image_name>
 ```
 
-* `-it` = interactive
-* `-v` = links to the volume on the local host
+* `-it` interactive
+* `-v` links to the volume on the local host. It may be necessary to write the path explicity, e.g.: 'C:/Users/Rosanna/floodmappingoutput'
 * `-p` port
+* `--user root` to allow writing access the container directory 'flood_extent_mapping'
 * `--name` choose name for the container
 * name of the image
 
