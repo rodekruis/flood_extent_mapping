@@ -99,7 +99,7 @@ docker run -it -v <directory>:/home/jovyan/flood_extent_mapping -p 8888:8888 --u
 
 The container has an entrypoint that immediately runs the jupyter notebook that has the ip address 0.0.0.0. Port 8888 is mapped to this address, so the notebook can now be accessed through [localhost:8888](localhost:8888). 
 
-## 4. Running the notebook
+#### 4. Running the notebook
 Create a folder named 'AOI' and place 1 file in it with the area of interest (GeoJSON, SHP, KML, KMZ).
 1. *User Input*: Choose a start and end date in which to search through the Copernicus Hub, and set username and password to access the Hub. 
 2. *Initialization*: run
