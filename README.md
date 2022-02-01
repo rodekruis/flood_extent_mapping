@@ -46,13 +46,13 @@ Only Docker is needed.
 1. Install Docker
 2. Get a Personal Access Token that has `read:packages` for the GitHub Container repository
 3. Log on to the repository: `docker login docker.pkg.github.com --username <your_user_name> --password <generated_token_not_password>`
-3a. Pull the docker-snap image: `docker pull docker.pkg.github.com/snap-contrib/docker-snap/snap:latest`
-4. Build the image `docker build  <directory_with_files> -t <choose_image_name>`
-5. Run the image `docker run -it -v <directory_with_files>:/home/jovyan/flood_extent_mapping -p 8888:8888 --name <container-name> <image_name>`
-6. Go to [localhost:8888](http://localhost:8888)
-7. Create a folder named 'AOI' and place 1 file in it with the area of interest (GeoJSON, SHP, KML, KMZ).
-8. Run notebook. Set `tile_id` to select which satellite image to download in codeblock 4. 
-9. Run the rest of the notebook. 
+4. Pull the docker-snap image: `docker pull docker.pkg.github.com/snap-contrib/docker-snap/snap:latest`
+5. Build the image `docker build  <directory_with_files> -t <choose_image_name>`
+6. Run the image `docker run -it -v <directory_with_files>:/home/jovyan/flood_extent_mapping -p 8888:8888 --name <container-name> <image_name>`
+7. Go to [localhost:8888](http://localhost:8888)
+8. Create a folder named 'AOI' and place 1 file in it with the area of interest (GeoJSON, SHP, KML, KMZ).
+9. Run notebook. Set `tile_id` to select which satellite image to download in codeblock 4. 
+10. Run the rest of the notebook. 
 
 ### Detailed instructions
  
