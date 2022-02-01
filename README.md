@@ -45,8 +45,7 @@ Only Docker is needed.
 ### TLDR
 1. Install Docker
 2. Get a Personal Access Token that has `read:packages` for the GitHub Container repository
-3. Log on to the repository: `docker login docker.pkg.github.com --username <your_user_name> --password <generated_token_not_password>
-`
+3. Log on to the repository: `docker login docker.pkg.github.com --username <your_user_name> --password <generated_token_not_password>`
 3a. Pull the docker-snap image: `docker pull docker.pkg.github.com/snap-contrib/docker-snap/snap:latest`
 4. Build the image `docker build  <directory_with_files> -t <choose_image_name>`
 5. Run the image `docker run -it -v <directory_with_files>:/home/jovyan/flood_extent_mapping -p 8888:8888 --name <container-name> <image_name>`
