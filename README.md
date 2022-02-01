@@ -47,9 +47,10 @@ Only Docker is needed.
 2. Get a Personal Access Token that has `read:packages` for the GitHub Container repository
 3. Log on to the repository: `docker login docker.pkg.github.com --username <your_user_name> --password <generated_token_not_password>
 `
+3a. Pull the docker-snap image: `docker pull docker.pkg.github.com/snap-contrib/docker-snap/snap:latest`
 4. Build the image `docker build  <directory_with_files> -t <choose_image_name>`
 5. Run the image `docker run -it -v <directory_with_files>:/home/jovyan/flood_extent_mapping -p 8888:8888 --name <container-name> <image_name>`
-6. Go to [localhost:8888](localhost:8888)
+6. Go to [localhost:8888](http://localhost:8888)
 7. Create a folder named 'AOI' and place 1 file in it with the area of interest (GeoJSON, SHP, KML, KMZ).
 8. Run notebook. Set `tile_id` to select which satellite image to download in codeblock 4. 
 9. Run the rest of the notebook. 
@@ -63,10 +64,14 @@ Docker Desktop installation guides are available for [Windows](https://docs.dock
 #### 2. Login to the GitHub Container registry
 
 1. Login on github and [go to this  page](https://github.com/settings/tokens/new) and create a personal access token with the scope *read:packages*. Copy the token somewhere. 
-2. Go to your command line ('Terminal App' on a Mac, 'Powershell' on Windows) and login to the GitHub Container registry:
+2. Go to your command line ('Terminal App' on a Mac, 'Powershell' on Windows) and login to the GitHub Container registry using the personal access token:
 ```{bash}
 docker login docker.pkg.github.com --username <GitHub_username> --password <personal_access_token>
 ```
+3. When you are logged in successfully, pull the [docker-snap](https://github.com/snap-contrib/docker-snap) image:
+```{bash}
+docker pull docker.pkg.github.com/snap-contrib/docker-snap/snap:latest
+``` 
 
 #### 3. Create the container
 Build the image:
@@ -99,7 +104,7 @@ docker run -it -v <directory>:/home/jovyan/flood_extent_mapping -p 8888:8888 --u
 
 The container has an entrypoint that immediately runs the jupyter notebook that has the ip address 0.0.0.0. Port 8888 is mapped to this address, so the notebook can now be accessed through [localhost:8888](localhost:8888). 
 
-#### 4. Running the notebook
+#### 4. Mapping a flood
 Create a folder named 'AOI' and place 1 file in it with the area of interest (GeoJSON, SHP, KML, KMZ).
 1. *User Input*: Choose a start and end date in which to search through the Copernicus Hub, and set username and password to access the Hub. 
 2. *Initialization*: run
