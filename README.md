@@ -12,6 +12,9 @@ Docker container that runs the UN-SPIDER jupyter notebook.
 * KMZ
 * SHP
 
+Maximum area of 850 km^2 is recommended for quick processing. Can be increased up to 1600 km^2, but will be slower. 
+*Potential solution:* If a larger area is needed, the maximum memory the SNAP software is allowed to use should be increase. See "Increasing SNAP memory".
+
 **Output**: Flooded area, in:
 
 * GeoTIFF
@@ -121,3 +124,13 @@ The required software is automatically installed with the Docker image, that we 
 
 All python packages are installed in the conda environment 'env-snap'. GDAl is already  installed with the *docker-snap* image but not recognised as a python package, therefore it is explicitely listed in the Dockerfile.
 *So far GDAL version 3.2.2 is the only version that installs without causing errors.*
+
+### Increasing SNAP memory
+Inside the docker container command line, navigate to `/srv/conda/envs/env_snap/snap/.snap/snap-python/snappy`. Open snappy.ini and increase 4G to however much your computer can handle. On windows, snappy.ini can be opened with vim :
+```
+vim snappy.ini
+i
+<edit 4G>
+:w
+:q
+```
