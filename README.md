@@ -13,7 +13,7 @@ Docker container that runs the UN-SPIDER jupyter notebook.
 * SHP
 
 Maximum area of 850 km^2 is recommended for quick processing. Can be increased up to 1600 km^2, but will be slower.  
-*Potential solution:* If a larger area is needed, it might ehlp to increase the maximum memory the SNAP software is allowed to use. See [Increasing SNAP memory](#increasing-snap-memory).
+*Potential solution:* If a larger area is needed, it might help to increase the maximum memory the SNAP software is allowed to use. See [Increasing SNAP memory](#increasing-snap-memory).
 
 **Output**: Flooded area, in:
 
