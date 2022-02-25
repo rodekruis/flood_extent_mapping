@@ -3,6 +3,7 @@ import json                                   # JSON encoder and decoder
 import os                                     # data access
 import shutil                                 # file operations
 import functools                              # higher-order functions and operations
+from osgeo import ogr, gdal, osr              # data conversion
 from sentinelsat.sentinel import SentinelAPI, read_geojson, geojson_to_wkt  # interface to Open Access Hub
 from processing import *
 from writeoutput import *
