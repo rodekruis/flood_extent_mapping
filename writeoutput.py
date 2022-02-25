@@ -1,8 +1,10 @@
 import os                                     # data access
 import time                                   # time assessment
 import snappy                                 # SNAP Python interface
+from osgeo import ogr, gdal, osr              # data conversion
+import geopandas                              # data analysis and manipulation
 
-def writingoutput(floodmask, directory, inputname, output_extensions):
+def writingoutput(floodmask, directory, inputname, output_extensions, polarisations):
 
     print('Exporting...\n', flush=True)
     # check if output folders exists, if not create folders
