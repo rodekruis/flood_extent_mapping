@@ -58,5 +58,5 @@ def downloadproduct(api, firstproduct_id, directory):
         os.chdir(directory)
         print('Downloading done.')
     else:
-        print('\nProduct %s is not online. Must be requested manually.\n' % tile_id, flush=True)
+        print('\nProduct %s is not online. Must be requested manually.\n' % firstproduct_id, flush=True)
     
